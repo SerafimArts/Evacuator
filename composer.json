@@ -1,0 +1,24 @@
+{
+    "name": "serafim/evacuator",
+    "description": "Try-catch with multiple retries",
+    "homepage": "https://github.com/SerafimArts/Evacuator",
+    "type": "library",
+    "license": "WTFPL",
+    "authors": [
+        {
+            "name": "Nesmeyanov Kirill",
+            "email": "nesk@xakep.ru"
+        }
+    ],
+    "require": {
+        "php": ">=7.0"
+    },
+    "autoload": {
+        "files": [
+            "src/helpers.php"
+        ],
+        "psr-4": {
+            "Serafim\\Evacuator\\": "src/"
+        }
+    }
+}
