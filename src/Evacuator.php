@@ -3,7 +3,7 @@
  * This file is part of Evacuator package.
  *
  * @author Serafim <nesk@xakep.ru>
- * @date 06.04.2016 15:22
+ * @date 05.05.2016 11:16
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -51,7 +51,7 @@ class Evacuator
      * @param \Closure $callback
      * @return $this
      */
-    public function catch (\Closure $callback)
+    public function error (\Closure $callback)
     {
         $this->catchable = $callback;
 
@@ -62,7 +62,7 @@ class Evacuator
      * @param \Closure $callback
      * @return $this
      */
-    public function finally(\Closure $callback)
+    public function every(\Closure $callback)
     {
         $this->finalizable = $callback;
 
@@ -73,7 +73,7 @@ class Evacuator
      * @param int $count
      * @return $this|Evacuator
      */
-    public function retry(int $count) : Evacuator
+    public function retry($count)
     {
         $this->retries = $count;
 
@@ -93,15 +93,16 @@ class Evacuator
 
         do {
             try {
-                $result = ($this->action)(...$args);
-                return $result;
+                $action = $this->action;
+                return $action(...$args);
 
             } catch (\Throwable $e) {
                 $exception = $e;
-                if ($this->catchable !== null) {
-                    ($this->catchable)($e);
-                }
 
+                if ($this->catchable !== null) {
+                    $catch = $this->catchable;
+                    $catch($e);
+                }
             }
         } while (
             $this->retries === static::INFINITY_RETRIES ||
@@ -110,10 +111,10 @@ class Evacuator
 
 
         if ($this->finalizable !== null) {
-            ($this->finalizable)($exception);
-        }
+            $finalize = $this->finalizable;
+            $finalize($exception);
 
-        if ($exception !== null) {
+        } elseif ($exception !== null) {
             throw $exception;
         }
     }
