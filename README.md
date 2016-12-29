@@ -1,6 +1,9 @@
 Evacuator 2.0
 =============
 
+[![Build Status](https://travis-ci.org/SerafimArts/Evacuator.svg?branch=master)](https://travis-ci.org/SerafimArts/Evacuator)
+[![Code Quality](https://scrutinizer-ci.com/g/SerafimArts/Evacuator/badges/quality-score.png?b=master)](https://scrutinizer-ci.com/g/SerafimArts/Evacuator/inspections)
+
 He trying to save your code, if it is broken :3
 
 ## Installation
