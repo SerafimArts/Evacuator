@@ -1,58 +1,79 @@
-Evacuator
-=========
+Evacuator 2.0
+=============
 
 He trying to save your code, if it is broken :3
-
-## Usage
-
-```php
-$evacuator = rescue(function () { // What we are trying to save
-    echo 23 . "\n";
-
-    throw new Exception('Ooooups =(');
-});
-
-$evacuator(2); // How much retries
-
-/* ===============
- *     OUTPUT
- * ===============
- *
- * 23
- * 23 // first retry 
- * 23 // second retry
- *  
- *  Fatal error: Uncaught Exception: Ooooups =( in
- */
-```
 
 ## Installation
 
 `composer require serafim/evacuator`
 
-## Extended usage
+## Usage example
+
+```php
+// What we are trying to keep safe?
+$result = rescue(function () { 
+    if (random_int(0, 9999) > 1) {
+        throw new \Exception('Ooooups =(');
+    }
+    
+    return 23;
+});
+
+var_dump($result); // int(23)
+```
+
+## Advanced usage
 
 ```php
 use Serafim\Evacuator\Evacuator;
 
-(new Evacuator(function() {
+$result = (new Evacuator(function() {
 
     // Your a very important piece of code
 
 }))
 
-    ->retry(100500) // If code throws an exception - retries 100500 times
-    ->retry(Evacuator::INFINITY_RETRIES) // or until the cancer is not on the mountain whistles...
+    // Code throws an exception after 100500 call retries 
+    ->retry(100500) 
     
-    ->catch(function(Throwable $e) {
-        // Run this code after every attempt.
+    // or until the cancer is not on the mountain whistles...
+    ->retry(Evacuator::INFINITY_RETRIES) 
+    
+    // But if you want catch exception
+    ->catch(function (Throwable $e) {
+        return 'Something went wrong =('; // Will be returns into $result
     })
     
-    ->finally(function() {
-        // Run code after all attempts. Even when trying to repeat the action was not been made.
+    ->finally(function ($errorOrResult) {
+        // Run this code after all attempts.
+        // $errorOrResult can be error (if evacuator cant keep safe your code) or result value
+    })
+    
+    ->onError(function ($error) {
+        // Run this code after every error
     })
     
     ->invoke(); // Just run your very important code
+```
+
+## Catching strategy
+
+```php
+$result = (new Evacuator(function() {
+    throw new \LogicException('Error');
+}))
+
+    ->catch(function (\RuntimeException $e) {
+        // I am alone and never be use ='( 
+    })
+    // ->onError(function (\RuntimeException $e) {})
+    
+    ->catch(function (\LogicException $e) {
+        // Yay! I will calling because Im a LogicException! :D
+    })
+    // ->onError(function (\LogicException $e) {})
+    
+    ->invoke();
 ```
 
 Enjoy! :3

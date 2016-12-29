@@ -1,9 +1,6 @@
-<?php
+<?php declare(strict_types = 1);
 /**
  * This file is part of Evacuator package.
- *
- * @author Serafim <nesk@xakep.ru>
- * @date 05.05.2016 11:16
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -16,12 +13,21 @@ namespace Serafim\Evacuator;
  */
 class Evacuator
 {
-    const INFINITY_RETRIES = -1;
+    /**
+     * @var string
+     * @internal
+     */
+    const CATCH_ALL_EXCEPTIONS = '*';
+
+    /**
+     * @var int
+     */
+    const INFINITY_RETRIES = -100;
 
     /**
      * @var \Closure
      */
-    private $action;
+    private $context;
 
     /**
      * @var int
@@ -29,93 +35,216 @@ class Evacuator
     private $retries = 0;
 
     /**
-     * @var null|\Closure
+     * @var array|\Closure[]
      */
-    private $catchable = null;
+    private $catches = [];
 
     /**
      * @var null|\Closure
      */
-    private $finalizable = null;
+    private $then;
+
+    /**
+     * @var array|\Closure
+     */
+    private $everyError = [];
 
     /**
      * Evacuator constructor.
-     * @param \Closure $action
+     * @param \Closure $context
      */
-    public function __construct(\Closure $action)
+    public function __construct(\Closure $context)
     {
-        $this->action = $action;
+        $this->context = $context;
     }
 
     /**
-     * @param \Closure $callback
-     * @return $this
+     * @param array ...$args
+     * @return mixed
+     * @throws \Throwable
      */
-    public function error (\Closure $callback)
+    public function __invoke(...$args)
     {
-        $this->catchable = $callback;
-
-        return $this;
-    }
-
-    /**
-     * @param \Closure $callback
-     * @return $this
-     */
-    public function every(\Closure $callback)
-    {
-        $this->finalizable = $callback;
-
-        return $this;
+        return $this->invoke(...$args);
     }
 
     /**
      * @param int $count
-     * @return $this|Evacuator
+     * @return Evacuator
+     * @throws \InvalidArgumentException
      */
-    public function retry($count)
+    public function retries(int $count): Evacuator
     {
+        if ($count < 0 && $count !== static::INFINITY_RETRIES) {
+            throw new \InvalidArgumentException('Retries count must be greater than 0');
+        }
+
         $this->retries = $count;
 
         return $this;
     }
 
     /**
+     * @param \Closure $then
+     * @return Evacuator|$this
+     * @throws \InvalidArgumentException
+     */
+    public function catch(\Closure $then): Evacuator
+    {
+        $exceptionClass = $this->resolveTypeHint($then, \Throwable::class);
+
+        $this->catches[$exceptionClass] = $then;
+
+        return $this;
+    }
+
+    /**
+     * @param \Closure $then
+     * @return Evacuator
+     * @throws \InvalidArgumentException
+     */
+    public function onError(\Closure $then): Evacuator
+    {
+        $exceptionClass = $this->resolveTypeHint($then, \Throwable::class);
+
+        $this->everyError[$exceptionClass] = $then;
+
+        return $this;
+    }
+
+    /**
+     * @param \Closure $closure
+     * @param string $instanceOf
+     * @return string
+     * @throws \InvalidArgumentException
+     */
+    private function resolveTypeHint(\Closure $closure, string $instanceOf): string
+    {
+        $parameters = (new \ReflectionFunction($closure))->getParameters();
+
+        // Callback has ony one argument
+        if (1 !== count($parameters)) {
+            throw new \InvalidArgumentException(
+                'Closure argument of catch(...) method required ' . (count($parameters) > 1 ? 'only ' :'') .
+                '1 parameter ' . count($parameters) . ' given'
+            );
+        }
+
+        // Callback has no type hints
+        if (null === reset($parameters)->getType()) {
+            return static::CATCH_ALL_EXCEPTIONS;
+        }
+
+        $typeHintClass = reset($parameters)->getClass();
+
+        // Callback has primitive type hint
+        if (null === $typeHintClass) {
+            throw new \InvalidArgumentException(
+                'Closure argument of catch(...) method type hint can not be a primitive'
+            );
+        }
+
+        if (!($typeHintClass->newInstanceWithoutConstructor() instanceof $instanceOf)) {
+            throw new \InvalidArgumentException(
+                'Closure argument of catch(...) method type hint must be instance of ' . $instanceOf .
+                    ', ' . $typeHintClass->name . ' given'
+            );
+        }
+
+        return $typeHintClass->name;
+    }
+
+    /**
      * @param array ...$args
-     * @return \Closure
+     * @return mixed
      * @throws \Throwable
-     * @throws null
      */
     public function invoke(...$args)
     {
-        $exception = null;
-        $current = 0;
+        $result = null;
+        $error  = null;
 
-        do {
+        try {
+            $result = $this->callClosure(...$args);
+        } catch (\Throwable $e) {
+            $error = $e;
+        }
+
+        if ($this->then) {
+            return ($this->then)($result ?? $error);
+        }
+
+        if ($error !== null) {
+            throw $error;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array ...$args
+     * @return mixed
+     * @throws \Throwable
+     */
+    private function callClosure(...$args)
+    {
+        while (
+            $this->retries === static::INFINITY_RETRIES ||
+            ($this->retries-- + 1) > 0
+        ) {
             try {
-                $action = $this->action;
-                return $action(...$args);
-
+                return ($this->context)(...$args);
             } catch (\Throwable $e) {
-                $exception = $e;
+                $this->throw($e, $this->everyError);
 
-                if ($this->catchable !== null) {
-                    $catch = $this->catchable;
-                    $catch($e);
+                if ($this->willBeThrows()) {
+                    return $this->throw($e, $this->catches, true);
                 }
             }
-        } while (
-            $this->retries === static::INFINITY_RETRIES ||
-            $current++ < $this->retries
-        );
-
-
-        if ($this->finalizable !== null) {
-            $finalize = $this->finalizable;
-            $finalize($exception);
-
-        } elseif ($exception !== null) {
-            throw $exception;
         }
+
+        return null;
+    }
+
+    /**
+     * @return bool
+     * @throws \Throwable
+     */
+    private function willBeThrows(): bool
+    {
+        return $this->retries !== static::INFINITY_RETRIES && $this->retries < 0;
+    }
+
+    /**
+     * @param \Throwable $e
+     * @param array $callbacks
+     * @param bool $throwAfter
+     * @return mixed
+     * @throws \Throwable
+     */
+    private function throw(\Throwable $e, array $callbacks, bool $throwAfter = false)
+    {
+        foreach ($callbacks as $name => $callback) {
+            if ($e instanceof $name || $name === static::CATCH_ALL_EXCEPTIONS) {
+                return $callback($e);
+            }
+        }
+
+        if ($throwAfter) {
+            throw $e;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param \Closure $then
+     * @return Evacuator|$this
+     */
+    public function finally(\Closure $then): Evacuator
+    {
+        $this->then = $then;
+
+        return $this;
     }
 }
