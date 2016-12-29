@@ -10,6 +10,8 @@ He trying to save your code, if it is broken :3
 
 `composer require serafim/evacuator`
 
+> Link to [Packagist](https://packagist.org/packages/serafim/evacuator)
+
 ## Usage example
 
 ```php
