@@ -1,4 +1,4 @@
-Evacuator 2.0
+Evacuator 3.0
 =============
 
 [![Build Status](https://travis-ci.org/SerafimArts/Evacuator.svg?branch=master)](https://travis-ci.org/SerafimArts/Evacuator)
